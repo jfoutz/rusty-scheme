@@ -1,52 +1,71 @@
-#![feature(overloaded_calls)]
-
-
 use std::str::Chars;
 
-trait Parser<'a> : Fn<(&'a mut Chars<'a>,),bool> {}
-
-struct Match{
-    n: char,
+trait Parser<'a> {
+    fn m(&self, &mut Chars) -> bool;
 }
 
-impl<'a> Fn<(&'a mut Chars<'a>,), bool> for Match{
-    extern "rust-call" fn call(&self, args: (& mut Chars<'a>,)) -> bool {
-        let (v,) = args;
-        match v.next(){
-            Some(c) => self.n == c,
+struct Match<'a> {
+    c : char
+}
+
+impl<'a> Parser<'a> for Match<'a> {
+    fn m(&self, src:&mut Chars) -> bool{
+        println!("match {} ", self.c);
+        match src.next(){
+            Some(v) => v == self.c,
             None => false
         }
     }
 }
-impl<'a> Parser<'a> for Match {}
 
-
-fn mk_match(c:char) -> Match{
-    Match{n:c}
+struct Or<'a> {
+    f: &'a Parser<'a> + 'a,
+    s: &'a Parser<'a> + 'a
 }
 
-struct Or<'a,T: Parser<'a> >{
-    f:&'a T,
-    s:&'a T
-}
-
-impl<'a,T:Parser<'a>> Fn<(&'a mut Chars<'a>,), bool> for Or<'a,T>{
-    extern "rust-call" fn call(&self, args: (& mut Chars<'a>,)) -> bool {
-        let (v,) = args;
-        let try = v.clone();
-        if((*self.f)(try)){
+impl<'a> Parser<'a> for Or<'a> {
+    fn m(&self, src:&mut Chars) -> bool{
+        println!("or ");
+        let mut save = src.clone();
+        if self.f.m(src){
             true
         } else {
-            (*self.s)(v)
+            self.s.m(&mut save)
         }
     }
 }
-impl<'a> Parser<'a> for Or<'a,Parser<'a> +'a> {}
+
+struct And<'a> {
+    f: &'a Parser<'a> + 'a,
+    s: &'a Parser<'a> + 'a
+}
+
+impl<'a> Parser<'a> for And<'a> {
+    fn m(&self, src:&mut Chars) -> bool{
+        println!("and ");
+        if self.f.m(src){
+            self.s.m(src)
+        } else {
+            false
+        }
+    }
+}
+
+
+fn foo(p:&Parser){
+    println!("ac {}", p.m(&mut ("ac".chars())));
+    println!("bc {}", p.m(&mut ("bc".chars())));
+}
 
 fn main(){
-    let m = mk_match('a');
-    let mut a = "a".chars();
-    let mut b = "b".chars();
-    println!("hello {}!", m(&mut a));
-    println!("hello {}!", m(&mut b));
+    let o = And{
+        f:&Or{f:&Match{c:'a'},
+             s:&Match{c:'b'}},
+        s:&Match{c:'c'}
+    };
+    let c = & mut("abc".chars());
+    o.m(c);
+
+    o.m(&mut ("def".chars()));
+    foo(&o);
 }
