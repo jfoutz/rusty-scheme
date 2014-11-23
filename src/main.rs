@@ -1,12 +1,23 @@
 // ok, lets start with parsing something
 use std::str::Chars;
+use std::fmt;
 use SchemeObj::Val;
 use SchemeObj::Lst;
 
 enum SchemeObj {
     Lst(Vec<SchemeObj>),
-    //Lst(int),
-    Val(int)
+    Val(String)
+}
+
+impl fmt::Show for SchemeObj{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result{
+        match self{
+            &Val(ref v) => write!(f, "{}", v),
+            &Lst(ref v) => {
+                write!(f, "({}) ", v)
+            }
+        }
+    }
 }
 
 fn parse_list(mut src : Chars)->SchemeObj{
@@ -20,7 +31,8 @@ fn parse_list(mut src : Chars)->SchemeObj{
                 return Lst(list);
             },
             Some(c) => {
-                list.push(parse_val(c,src));
+                println!("matched {}", c);
+                list.push(parse_val(c,&mut src));
             },
             None => {
                 println!("unterminated list");
@@ -30,8 +42,25 @@ fn parse_list(mut src : Chars)->SchemeObj{
     }
 }
 
-fn parse_val(c: char, src : Chars) -> SchemeObj {
-    Val(0)
+fn parse_val(c: char, src : &mut Chars) -> SchemeObj {
+    let mut sym = String::new();
+    sym.push(c);
+    loop {
+        match src.next(){
+            Some(' ') => {
+                return Val(sym);
+            }
+            Some('\n') => {
+                return Val(sym);
+            }
+            Some(c) => {
+                sym.push(c);
+            }
+            None => {
+                return Val(sym);
+            }
+        }
+    }
 }
 
 fn parse(src : &str) -> SchemeObj{
@@ -44,7 +73,7 @@ fn parse(src : &str) -> SchemeObj{
                 list.push(parse_list(v));
             },
             Some(c) => {
-                list.push(parse_val(c,v));
+                list.push(parse_val(c,&mut v));
             },
             None => {
                 return Lst(list)
@@ -56,6 +85,6 @@ fn parse(src : &str) -> SchemeObj{
 }
 
 fn main(){
-    parse("(hello world list)");
-    println!("hello foobar!");
+    let s = parse("(hello world list)");
+    println!("hello {}!", s);
 }
