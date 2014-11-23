@@ -1,90 +1,52 @@
-// ok, lets start with parsing something
+#![feature(overloaded_calls)]
+
+
 use std::str::Chars;
-use std::fmt;
-use SchemeObj::Val;
-use SchemeObj::Lst;
 
-enum SchemeObj {
-    Lst(Vec<SchemeObj>),
-    Val(String)
+trait Parser<'a> : Fn<(&'a mut Chars<'a>,),bool> {}
+
+struct Match{
+    n: char,
 }
 
-impl fmt::Show for SchemeObj{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result{
-        match self{
-            &Val(ref v) => write!(f, "{}", v),
-            &Lst(ref v) => {
-                write!(f, "({}) ", v)
-            }
+impl<'a> Fn<(&'a mut Chars<'a>,), bool> for Match{
+    extern "rust-call" fn call(&self, args: (& mut Chars<'a>,)) -> bool {
+        let (v,) = args;
+        match v.next(){
+            Some(c) => self.n == c,
+            None => false
         }
     }
 }
+impl<'a> Parser<'a> for Match {}
 
-fn parse_list(mut src : Chars)->SchemeObj{
-    let mut list = Vec::new();
-    loop{
-        match src.next(){
-            Some('(') => {
-                list.push(parse_list(src));
-            },
-            Some(')') => {
-                return Lst(list);
-            },
-            Some(c) => {
-                println!("matched {}", c);
-                list.push(parse_val(c,&mut src));
-            },
-            None => {
-                println!("unterminated list");
-                return Lst(list);
-            }
+
+fn mk_match(c:char) -> Match{
+    Match{n:c}
+}
+
+struct Or<'a,T: Parser<'a> >{
+    f:&'a T,
+    s:&'a T
+}
+
+impl<'a,T:Parser<'a>> Fn<(&'a mut Chars<'a>,), bool> for Or<'a,T>{
+    extern "rust-call" fn call(&self, args: (& mut Chars<'a>,)) -> bool {
+        let (v,) = args;
+        let try = v.clone();
+        if((*self.f)(try)){
+            true
+        } else {
+            (*self.s)(v)
         }
     }
 }
-
-fn parse_val(c: char, src : &mut Chars) -> SchemeObj {
-    let mut sym = String::new();
-    sym.push(c);
-    loop {
-        match src.next(){
-            Some(' ') => {
-                return Val(sym);
-            }
-            Some('\n') => {
-                return Val(sym);
-            }
-            Some(c) => {
-                sym.push(c);
-            }
-            None => {
-                return Val(sym);
-            }
-        }
-    }
-}
-
-fn parse(src : &str) -> SchemeObj{
-    let mut v = src.chars();
-    let mut list = Vec::new();
-    loop {
-        
-        match v.next() {
-            Some( '(' ) => {
-                list.push(parse_list(v));
-            },
-            Some(c) => {
-                list.push(parse_val(c,&mut v));
-            },
-            None => {
-                return Lst(list)
-            }
-        }
-        }
-
-            
-}
+impl<'a> Parser<'a> for Or<'a,Parser<'a> +'a> {}
 
 fn main(){
-    let s = parse("(hello world list)");
-    println!("hello {}!", s);
+    let m = mk_match('a');
+    let mut a = "a".chars();
+    let mut b = "b".chars();
+    println!("hello {}!", m(&mut a));
+    println!("hello {}!", m(&mut b));
 }
